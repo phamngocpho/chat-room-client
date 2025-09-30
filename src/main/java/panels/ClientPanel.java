@@ -13,7 +13,7 @@ import raven.toast.Notifications;
 
 public class ClientPanel extends JPanel {
     // Thông tin kết nối
-    private static final String SERVER_IP = "localhost";
+    private static final String SERVER_IP = "administrator";
     private static final int SERVER_PORT = 6777;
 
     // Components
@@ -201,55 +201,55 @@ public class ClientPanel extends JPanel {
                             // Hiển thị thông báo
                             addToChat("Hệ thống", "Đang nhận file '" + fileName + "' từ " + fileSender + "...");
 
-                            // Hiển thị progress bar
-                            SwingUtilities.invokeLater(() -> {
-                                progressBar.setValue(0);
-                                progressBar.setString("Đang nhận: 0%");
-                                progressBar.setVisible(true);
-                            });
+                            // Hiển thị hộp thoại để chọn vị trí lưu file
+                            int choice = JOptionPane.showConfirmDialog(this,
+                                    "Bạn có muốn tải xuống file '" + fileName + "' không?",
+                                    "Tải xuống file", JOptionPane.YES_NO_OPTION);
 
-                            // Tạo thư mục lưu file nếu chưa tồn tại
-                            File downloadDir = new File("downloads");
-                            if (!downloadDir.exists()) {
-                                downloadDir.mkdir();
-                            }
+                            if (choice == JOptionPane.YES_OPTION) {
+                                JFileChooser fileChooser = new JFileChooser();
+                                fileChooser.setSelectedFile(new File(fileName));
+                                int res = fileChooser.showSaveDialog(this);
 
-                            // Tạo file để lưu
-                            String savedFileName = System.currentTimeMillis() + "_" + fileName;
-                            File downloadFile = new File(downloadDir, savedFileName);
+                                if (res == JFileChooser.APPROVE_OPTION) {
+                                    File saveFile = fileChooser.getSelectedFile();
 
-                            // Nhận và lưu file
-                            try (FileOutputStream fos = new FileOutputStream(downloadFile)) {
-                                byte[] buffer = new byte[4096];
-                                int bytesRead;
-                                long totalBytesRead = 0;
+                                    // Nhận và lưu file
+                                    try (FileOutputStream fos = new FileOutputStream(saveFile)) {
+                                        byte[] buffer = new byte[4096];
+                                        int bytesRead;
+                                        long totalBytesRead = 0;
 
-                                while (totalBytesRead < fileSize) {
-                                    bytesRead = dis.read(buffer, 0, (int) Math.min(buffer.length, fileSize - totalBytesRead));
-                                    if (bytesRead == -1) break;
+                                        while (totalBytesRead < fileSize) {
+                                            bytesRead = dis.read(buffer, 0, (int) Math.min(buffer.length, fileSize - totalBytesRead));
+                                            if (bytesRead == -1) break;
 
-                                    fos.write(buffer, 0, bytesRead);
-                                    totalBytesRead += bytesRead;
+                                            fos.write(buffer, 0, bytesRead);
+                                            totalBytesRead += bytesRead;
 
-                                    // Cập nhật tiến độ
-                                    final int progress = (int)((totalBytesRead * 100) / fileSize);
-                                    SwingUtilities.invokeLater(() -> {
-                                        progressBar.setValue(progress);
-                                        progressBar.setString("Đang nhận: " + progress + "%");
-                                    });
+                                            // Cập nhật tiến độ
+                                            final int progress = (int) ((totalBytesRead * 100) / fileSize);
+                                            SwingUtilities.invokeLater(() -> {
+                                                progressBar.setValue(progress);
+                                                progressBar.setString("Đang nhận: " + progress + "%");
+                                            });
+                                        }
+                                    }
+                                    // Thông báo hoàn thành
+                                    addToChat("Hệ thống", "Đã nhận file từ " + fileSender + "! Lưu tại: " + saveFile.getAbsolutePath());
+                                } else {
+                                    skipFile(fileSize);
+                                    addToChat("Hệ thống", "Đã bỏ qua file '" + fileName + "'");
                                 }
+                            } else {
+                                skipFile(fileSize);
+                                addToChat("Hệ thống", "Đã bỏ qua file '" + fileName + "'");
                             }
-
-                            // Thông báo hoàn thành
-                            addToChat("Hệ thống", "Đã nhận file từ " + fileSender + "! Lưu tại: " + downloadFile.getAbsolutePath());
 
                             // Ẩn progress bar
                             SwingUtilities.invokeLater(() -> {
                                 progressBar.setVisible(false);
                             });
-
-                            // Hiển thị thông báo
-                            Notifications.getInstance().show(Notifications.Type.SUCCESS, "Đã nhận file từ " + fileSender);
                             break;
                     }
                 }
@@ -263,6 +263,18 @@ public class ClientPanel extends JPanel {
 
         receiveThread.start();
     }
+
+    private void skipFile(long fileSize) throws IOException {
+        long skipped = 0;
+        byte[] buffer = new byte[4096];
+        while (skipped < fileSize) {
+            int toRead = (int) Math.min(buffer.length, fileSize - skipped);
+            int bytesRead = dis.read(buffer, 0, toRead);
+            if (bytesRead == -1) break;
+            skipped += bytesRead;
+        }
+    }
+
 
     private void sendMessage() {
         if (!isConnected) {
